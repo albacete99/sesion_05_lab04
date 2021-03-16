@@ -1,0 +1,52 @@
+---
+# ansible-galaxy collection install community.general
+- name: "Laboratorio 5 Lab04 - Cambio horario condicional - Pongo gestión de bloque con always para no fallar"
+  hosts: nodo1
+  tasks:
+    - block:
+        - name: "mostrar dia de la semana"
+          debug:
+            msg: "Dia {{ ansible_date_time['weekday_number']  }}"
+        - name: "Obtener marca de tiempo inicial y guardarla"
+          command: "date +%T"
+          register: hora_actual_previa
+        
+        - name: "Cambiar zona horaria a Moscow Lunes, Miércoles, Viernes y Domingo"
+          community.general.timezone:
+            name: Europe/Moscow
+          register: salida_cambiozona
+          when: (( ansible_date_time['weekday_number'] | int in (1,3,5,7)) and ( ansible_date_time.hour | int >= 12))
+          register: ejecutada
+        
+        - name: "Cambiar zona horaria a Tokio"
+          community.general.timezone:
+            name: Asia/Tokyo
+          register: salida_cambiozona
+          when: (( ansible_date_time['weekday_number'] | int in (2,4,6)) and ( ansible_date_time.hour | int >= 10 ))
+          
+        
+        - name: "Obtener marca de tiempo después de cambio y guardarla"
+          command: "date +%T"
+          register: hora_actual_posterior
+        
+        - name: "Crear fichero"
+          blockinfile:
+            path: "/tmp/datos_horariosLAB5_04_{{ ansible_facts['hostname'] }}.txt"
+            create: yes
+            block: |
+              - La zona horaria antes del cambio es {{ salida_cambiozona.diff.before.name }} Y la hora era {{ hora_actual_previa.stdout_lines[0] }}
+              - La zona horaria despues del cambio es {{ salida_cambiozona.diff.after.name}} Y Y la hora era {{ hora_actual_posterior.stdout_lines[0] }}
+          when: salida_cambiozona is not skipped
+        
+        - name: "Restablecer zona horaria"
+          timezone:
+            name: "{{ salida_cambiozona.diff.before.name }}"
+          register: salida_cambiozona2
+          when: salida_cambiozona is not skipped
+
+      always:  
+        - name: "Restablecer zona horaria a Madrid aunque falle"
+          timezone:
+            name: Europe/Madrid
+ 
+...
